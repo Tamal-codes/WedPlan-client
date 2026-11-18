@@ -1,7 +1,7 @@
 import Hero from "@/components/Hero";
 import FeaturedServices from "@/components/FeaturedServices";
 import Categories from "@/components/Categories";
-
+import WhyChooseUs from "@/components/WhyChooseUs";
 
 export default function Home() {
   return (
@@ -9,6 +9,7 @@ export default function Home() {
       <Hero />
       <FeaturedServices />
       <Categories />
+      <WhyChooseUs />
     </main>
   );
 }
