@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { toast } from "sonner";
+import { signIn, signUp } from "@/lib/auth-client";
 
 type AuthVariant = "sign-in" | "sign-up";
-type Status = "idle" | "loading" | "done";
+type Status = "idle" | "loading";
+type Role = "customer" | "vendor";
 
 const fieldClass =
   "w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm text-slate-900 shadow-sm outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-rose-400 focus:ring-4 focus:ring-rose-500/10";
@@ -112,13 +116,16 @@ function Field({
 function SocialButton({
   label,
   children,
+  onClick,
 }: {
   label: string;
   children: ReactNode;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2"
     >
       {children}
@@ -159,17 +166,107 @@ const appleIcon = (
   </svg>
 );
 
+function dashboardPath(role?: string | null) {
+  if (role === "admin") return "/dashboard/admin";
+  if (role === "vendor") return "/dashboard/vendor";
+  return "/dashboard/customer";
+}
+
 export default function AuthCard({ variant }: { variant: AuthVariant }) {
   const isSignIn = variant === "sign-in";
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
+  const [role, setRole] = useState<Role>("customer");
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (status !== "idle") return;
+
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+
     setStatus("loading");
-    window.setTimeout(() => setStatus("done"), 850);
+
+    try {
+      if (isSignIn) {
+        const { data, error } = await signIn.email({ email, password });
+
+        if (error) {
+          toast.error(error.message ?? "Invalid email or password");
+          return;
+        }
+
+        if (data?.user?.isBlocked) {
+          toast.error("Your account has been blocked.");
+          return;
+        }
+
+        toast.success("Signed in successfully");
+        router.push(dashboardPath(data?.user?.role));
+        router.refresh();
+        return;
+      }
+
+      // ---- Sign Up ----
+      const name = String(form.get("name") ?? "").trim();
+
+      if (password.length < 6) {
+        toast.error("Password must be at least 6 characters");
+        return;
+      }
+      if (!/[A-Z]/.test(password)) {
+        toast.error("Password must contain an uppercase letter");
+        return;
+      }
+      if (!/[a-z]/.test(password)) {
+        toast.error("Password must contain a lowercase letter");
+        return;
+      }
+
+      // ঐচ্ছিক প্রোফাইল ছবি আপলোড (ImgBB, সার্ভার রুট দিয়ে)
+      let image: string | undefined;
+      const file = form.get("image");
+      if (file instanceof File && file.size > 0) {
+        const uploadData = new FormData();
+        uploadData.append("image", file);
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadData,
+        });
+        if (!res.ok) {
+          toast.error("Image upload failed. Please try another image.");
+          return;
+        }
+        const json = await res.json();
+        image = json.url;
+      }
+
+      const { error } = await signUp.email({
+        name,
+        email,
+        password,
+        image,
+        role,
+      });
+
+      if (error) {
+        toast.error(error.message ?? "Could not create account");
+        return;
+      }
+
+      toast.success("Account created successfully");
+      router.push(dashboardPath(role));
+      router.refresh();
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setStatus("idle");
+    }
   };
+
+  const comingSoon = () => toast.info("This login option will be available soon");
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-white/80 bg-white/85 p-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.35)] backdrop-blur-xl sm:p-8">
@@ -220,8 +317,12 @@ export default function AuthCard({ variant }: { variant: AuthVariant }) {
 
       {/* Social auth */}
       <div className="mt-6 grid grid-cols-2 gap-2.5">
-        <SocialButton label="Google">{googleIcon}</SocialButton>
-        <SocialButton label="Apple">{appleIcon}</SocialButton>
+        <SocialButton label="Google" onClick={comingSoon}>
+          {googleIcon}
+        </SocialButton>
+        <SocialButton label="Apple" onClick={comingSoon}>
+          {appleIcon}
+        </SocialButton>
       </div>
 
       <div className="my-6 flex items-center gap-3">
@@ -257,13 +358,14 @@ export default function AuthCard({ variant }: { variant: AuthVariant }) {
           id="password"
           label="Password"
           type={showPassword ? "text" : "password"}
-          placeholder={isSignIn ? "Enter your password" : "At least 8 characters"}
+          placeholder={isSignIn ? "Enter your password" : "At least 6 characters"}
           autoComplete={isSignIn ? "current-password" : "new-password"}
           icon={lockIcon}
           hint={
             !isSignIn ? (
               <p className="text-xs text-slate-400">
-                Use 8+ characters with a mix of letters, numbers &amp; symbols.
+                Minimum 6 characters with one uppercase and one lowercase
+                letter.
               </p>
             ) : undefined
           }
@@ -301,6 +403,45 @@ export default function AuthCard({ variant }: { variant: AuthVariant }) {
             </button>
           }
         />
+
+        {/* শুধু Sign Up: রোল ও প্রোফাইল ছবি */}
+        {!isSignIn && (
+          <>
+            <div>
+              <span className={labelClass}>Account role</span>
+              <div className="grid grid-cols-2 gap-2.5">
+                {(["customer", "vendor"] as Role[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRole(r)}
+                    aria-pressed={role === r}
+                    className={`rounded-xl border px-4 py-3 text-sm font-medium capitalize transition-all outline-none focus-visible:ring-2 focus-visible:ring-rose-500 ${
+                      role === r
+                        ? "border-rose-400 bg-rose-50 text-rose-600 ring-4 ring-rose-500/10"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="image" className={labelClass}>
+                Profile image <span className="text-slate-400">(optional)</span>
+              </label>
+              <input
+                id="image"
+                name="image"
+                type="file"
+                accept="image/*"
+                className="block w-full rounded-xl border border-slate-200 bg-white text-sm text-slate-600 file:mr-4 file:cursor-pointer file:border-0 file:bg-rose-50 file:px-4 file:py-3 file:text-sm file:font-medium file:text-rose-600 hover:file:bg-rose-100"
+              />
+            </div>
+          </>
+        )}
 
         {isSignIn ? (
           <div className="flex items-center justify-between gap-3 pt-0.5">
@@ -347,31 +488,6 @@ export default function AuthCard({ variant }: { variant: AuthVariant }) {
           </label>
         )}
 
-        {status === "done" && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
-              aria-hidden="true"
-            >
-              <path d="m5 13 4 4L19 7" />
-            </svg>
-            <span>
-              <span className="font-semibold">You&apos;re all set!</span> This
-              demo doesn&apos;t create a real account yet.
-            </span>
-          </div>
-        )}
-
         <button
           type="submit"
           disabled={status !== "idle"}
@@ -391,22 +507,6 @@ export default function AuthCard({ variant }: { variant: AuthVariant }) {
                 <path d="M21 12a9 9 0 1 1-6.2-8.6" />
               </svg>
               {isSignIn ? "Signing in..." : "Creating account..."}
-            </>
-          ) : status === "done" ? (
-            <>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-                aria-hidden="true"
-              >
-                <path d="m5 13 4 4L19 7" />
-              </svg>
-              {isSignIn ? "Signed in" : "Account created"}
             </>
           ) : (
             <>
