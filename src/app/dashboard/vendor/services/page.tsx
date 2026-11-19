@@ -160,6 +160,12 @@ export default function MyServicesPage() {
                   >
                     {available ? "Available" : "Unavailable"}
                   </button>
+                  <Link
+                    href={`/dashboard/vendor/services/${s._id}/edit`}
+                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                  >
+                    Edit
+                  </Link>
                   <button
                     onClick={() => deleteService(s)}
                     disabled={busyId === s._id}
