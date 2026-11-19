@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { signOut, useSession } from "@/lib/auth-client";
+import DashboardSidebar from "@/components/DashboardSidebar";
 
 function dashboardPath(role?: string | null) {
   if (role === "admin") return "/dashboard/admin";
@@ -53,5 +54,10 @@ export default function DashboardLayout({
     );
   }
 
-  return <>{children}</>;
+ return (
+  <div className="mx-auto flex min-h-[70vh] w-full max-w-7xl flex-col lg:flex-row">
+    <DashboardSidebar role={user.role ?? "customer"} />
+    <div className="flex-1 p-4 sm:p-6 lg:p-8">{children}</div>
+  </div>
+);
 }
