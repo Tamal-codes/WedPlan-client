@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { signOut, useSession } from "@/lib/auth-client";
 
@@ -17,11 +17,22 @@ function dashboardPath(role?: string | null) {
   return "/dashboard/customer";
 }
 
+// সার্ভারে false, ব্রাউজারে হাইড্রেশনের পর true (হাইড্রেশন মিসম্যাচ এড়াতে)
+const subscribe = () => () => {};
+function useMounted() {
+  return useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false
+  );
+}
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const user = session?.user;
+  const mounted = useMounted();
 
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -171,7 +182,7 @@ export default function Navbar() {
 
         {/* Desktop auth actions */}
         <div className="hidden items-center gap-2 md:flex">
-          {isPending ? (
+          {!mounted || isPending ? (
             <div className="h-10 w-28 animate-pulse rounded-full bg-slate-100" />
           ) : user ? (
             <div ref={profileRef} className="relative">
@@ -304,7 +315,7 @@ export default function Navbar() {
             })}
 
             <div className="mt-3 grid gap-2 border-t border-slate-200/70 pt-4">
-              {isPending ? null : user ? (
+              {!mounted || isPending ? null : user ? (
                 <>
                   <div className="flex items-center gap-3 px-2 pb-2">
                     {avatar("h-10 w-10 shrink-0")}
