@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import "./globals.css";
 import Footer from "@/components/Footer";
 import { Toaster } from "sonner";
+import { Suspense } from "react";
 
 
 const geistSans = Geist({
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-screen flex-col overflow-x-hidden">
-        <Navbar />
+        <Suspense fallback={<div className="h-16 sm:h-20" />}>
+          <Navbar />
+        </Suspense>
         {children}
 
         <Footer></Footer>

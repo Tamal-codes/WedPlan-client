@@ -6,6 +6,7 @@ export type Service = {
   price: number;
   location: string;
   images: string[];
+  vendorId?: string;
   vendorName?: string;
   status: string;
 };
@@ -35,5 +36,12 @@ export async function getServices(
   if (!res.ok) {
     throw new Error("Failed to fetch services");
   }
+  return res.json();
+}
+
+export async function getService(id: string): Promise<Service | null> {
+  const res = await fetch(`${API_URL}/services/${id}`, { cache: "no-store" });
+  if (res.status === 404 || res.status === 400) return null;
+  if (!res.ok) throw new Error("Failed to fetch service");
   return res.json();
 }
